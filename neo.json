@@ -1,0 +1,131 @@
+{
+  "version": "v1.1",
+  "customGifs": [
+    {
+      "packet": 1,
+      "name": "开心",
+      "url": "https://linux.do/uploads/default/original/4X/5/d/2/5d203e597d8674c8859f32408fc9ccd36118f074.jpeg",
+      "alt": "始皇酱开心地笑",
+      "keywords": ["开心", "笑", "高兴", "喜悦", "happy", "smile", "joy", "pleased", "delighted"]
+    },
+    {
+      "packet": 2,
+      "name": "无语",
+      "url": "https://linux.do/uploads/default/original/4X/7/9/f/79f43fc1cc1cc19f2b8753f6360ecff1f625ac21.jpeg",
+      "alt": "始皇酱一脸无语",
+      "keywords": ["无语", "无奈", "没话说", "speechless", "helpless", "speechlessness", "at a loss", "dumbfounded"]
+    },
+    {
+      "packet": 3,
+      "name": "满足",
+      "url": "https://linux.do/uploads/default/original/4X/5/a/a/5aa849882b1acd9ed46fcfccc2c36aca3c32b576.jpeg",
+      "alt": "始皇酱感到满足",
+      "keywords": ["满足", "满意", "知足", "content", "satisfied", "fulfilled", "pleased", "gratified"]
+    },
+    {
+      "packet": 4,
+      "name": "调皮",
+      "url": "https://linux.do/uploads/default/original/4X/9/3/d/93db9ed78e08426ab8694030b38fa435d58b516b.jpeg",
+      "alt": "始皇酱调皮地眨眼",
+      "keywords": ["调皮", "顽皮", "搞怪", "playful", "mischievous", "naughty", "cheeky", "wink"]
+    },
+    {
+      "packet": 5,
+      "name": "思考",
+      "url": "https://linux.do/uploads/default/original/4X/0/0/b/00b26a0bf5e6d347f74c5d7fcb893ea0bf59f709.jpeg",
+      "alt": "始皇酱在沉思",
+      "keywords": ["思考", "沉思", "思索", "think", "ponder", "contemplate", "thoughtful", "thinking"]
+    },
+    {
+      "packet": 6,
+      "name": "恐惧",
+      "url": "https://linux.do/uploads/default/original/4X/f/2/8/f285ea7eebd13221bd9ee340fa7104fd42dd102a.jpeg",
+      "alt": "始皇酱感到害怕",
+      "keywords": ["恐惧", "害怕", "惊恐", "scared", "afraid", "fear", "terrified", "panic", "frightened"]
+    },
+    {
+      "packet": 7,
+      "name": "疑惑",
+      "url": "https://linux.do/uploads/default/original/4X/f/3/1/f3154aa2c232a3badc6c651edc9f832abc983d51.jpeg",
+      "alt": "始皇酱一脸疑惑",
+      "keywords": ["疑惑", "疑问", "困惑", "confused", "puzzled", "doubt", "uncertain", "questioning"]
+    },
+    {
+      "packet": 8,
+      "name": "委屈",
+      "url": "https://linux.do/uploads/default/original/4X/1/c/b/1cb69d62d240250ed471dce9fa23aaa5e8d90cdb.jpeg",
+      "alt": "始皇酱感到很委屈",
+      "keywords": ["委屈", "伤心", "难过", "wronged", "sad", "upset", "heartbroken", "grieved"]
+    },
+    {
+      "packet": 9,
+      "name": "得意",
+      "url": "https://linux.do/uploads/default/original/4X/3/7/5/3751e8671272f13b9459d75afea7b5c753fcdbdf.jpeg",
+      "alt": "始皇酱得意地笑",
+      "keywords": ["得意", "自豪", "骄傲", "smug", "proud", "cocky", "triumphant", "boastful"]
+    },
+    {
+      "packet": 10,
+      "name": "爱心",
+      "url": "https://linux.do/uploads/default/original/4X/a/5/a/a5a28c56591b39b58ae59f4b84ac51877c768e37.jpeg",
+      "alt": "始皇酱比出爱心",
+      "keywords": ["爱心", "爱", "喜欢", "love", "heart", "affection", "like", "cute", "adorable"]
+    },
+    {
+      "packet": 11,
+      "name": "兴奋",
+      "url": "https://linux.do/uploads/default/original/4X/6/7/7/6771733d4176267d9a0a694d632544240a7e359b.jpeg",
+      "alt": "始皇酱非常兴奋",
+      "keywords": ["兴奋", "激动", "亢奋", "excited", "thrilled", "energetic", "pumped", "elated"]
+    },
+    {
+      "packet": 12,
+      "name": "困倦",
+      "url": "https://linux.do/uploads/default/original/4X/a/c/3/ac3857beb73643a37c02fb7c8ae3ba09bb449113.jpeg",
+      "alt": "始皇酱困得睁不开眼",
+      "keywords": ["困倦", "困", "疲惫", "sleepy", "tired", "exhausted", "drowsy", "fatigue"]
+    },
+    {
+      "packet": 13,
+      "name": "害羞",
+      "url": "https://linux.do/uploads/default/original/4X/5/a/e/5ae2f48ee13b6361ae7d74a576747d50e78b40f4.jpeg",
+      "alt": "始皇酱害羞地脸红",
+      "keywords": ["害羞", "腼腆", "脸红", "shy", "bashful", "blush", "timid", "embarrassed"]
+    },
+    {
+      "packet": 14,
+      "name": "生气",
+      "url": "https://linux.do/uploads/default/original/4X/f/5/5/f552002bb04ab67e75783bb4811fea184c6f1784.jpeg",
+      "alt": "始皇酱气得冒烟",
+      "keywords": ["生气", "愤怒", "怒火", "angry", "mad", "furious", "rage", "irritated"]
+    },
+    {
+      "packet": 15,
+      "name": "惊讶",
+      "url": "https://linux.do/uploads/default/original/4X/5/f/c/5fc75f5ddd33027a8936a6c37132c410bac8e411.jpeg",
+      "alt": "始皇酱惊讶地张大嘴",
+      "keywords": ["惊讶", "震惊", "吃惊", "surprised", "shocked", "astonished", "amazed", "stunned"]
+    },
+    {
+      "packet": 16,
+      "name": "悲伤",
+      "url": "https://linux.do/uploads/default/original/4X/4/a/0/4a08ad7ba72beb50d5b4d003c8322fef7e1161a7.jpeg",
+      "alt": "始皇酱伤心地哭",
+      "keywords": ["悲伤", "哭泣", "伤心", "sad", "cry", "weep", "grief", "sorrowful"]
+    },
+    {
+      "packet": 17,
+      "name": "点赞",
+      "url": "https://file.woodo.cn/upload/image/201910/25/c7eb21a4-7693-4836-b23a-5ab3c9e1813d.gif",
+      "alt": "点赞 GIF",
+      "keywords": ["点赞", "赞", "好", "like", "thumbs up", "good", "approve"]
+    },
+    {
+      "packet": 18,
+      "name": "猫猫 wave",
+      "url": "https://file.woodo.cn/upload/image/201910/25/c7eb21a4-7693-4836-b23a-5ab3c9e1813d.gif",
+      "alt": "一只挥手的猫猫 GIF",
+      "keywords": ["猫", "wave", "挥手", "cat", "hello", "hi"]
+    }
+  ]
+}
