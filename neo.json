@@ -1,5 +1,5 @@
 {
-  "version": "v1.2",
+  "version": "v1.3",
   "customGifs": [
     {
       "packet": 1,
@@ -126,6 +126,69 @@
       "url": "https://file.woodo.cn/upload/image/201910/25/c7eb21a4-7693-4836-b23a-5ab3c9e1813d.gif",
       "alt": "一只挥手的猫猫 GIF",
       "keywords": ["猫", "wave", "挥手", "cat", "hello", "hi"]
+    },
+    {
+      "packet": 19,
+      "name": "惊讶",
+      "url": "https://linux.do/uploads/default/original/4X/e/b/a/eba45547481eb89106ddcdc4f5df950c5eaec6d7.gif",
+      "alt": "始皇惊讶",
+      "keywords": ["惊讶", "震惊", "吃惊", "surprised", "shocked", "astonished", "amazed", "stunned", "始皇", "emperor", "qin", "shi", "huang"]
+    },
+    {
+      "packet": 20,
+      "name": "生气",
+      "url": "https://linux.do/uploads/default/original/4X/e/b/a/ebaa9761902bf98f7893a63a4dc39b3a6b400aa2.gif",
+      "alt": "始皇生气",
+      "keywords": ["生气", "愤怒", "怒火", "angry", "mad", "furious", "rage", "irritated", "始皇", "emperor", "qin", "shi", "huang"]
+    },
+    {
+      "packet": 21,
+      "name": "疑惑",
+      "url": "https://linux.do/uploads/default/original/4X/1/9/1/191cbe315d06eddf64d107c0c04deb721fea4bff.gif",
+      "alt": "始皇疑惑",
+      "keywords": ["疑惑", "疑问", "困惑", "confused", "puzzled", "doubt", "uncertain", "questioning", "始皇", "emperor", "qin", "shi", "huang"]
+    },
+    {
+      "packet": 22,
+      "name": "吃饼",
+      "url": "https://linux.do/uploads/default/original/4X/d/d/a/dda230edf8dd0786bd255859bc67438f1dfd5ecb.gif",
+      "alt": "始皇吃饼",
+      "keywords": ["吃饼", "吃", "食物", "eating", "pancake", "food", "snack", "始皇", "emperor", "qin", "shi", "huang"]
+    },
+    {
+      "packet": 23,
+      "name": "大笑",
+      "url": "https://linux.do/uploads/default/original/4X/5/a/6/5a6b7f0bcd33f25c72af6b93812efc4aed12fcf3.gif",
+      "alt": "始皇大笑",
+      "keywords": ["大笑", "笑", "开心", "laugh", "rofl", "happy", "haha", "始皇", "emperor", "qin", "shi", "huang"]
+    },
+    {
+      "packet": 24,
+      "name": "你们赢了",
+      "url": "https://linux.do/uploads/default/original/4X/c/c/1/cc184f6566b0b8b5e90131108629d05042f4a41d.gif",
+      "alt": "你们赢了，但我们没有输（程序员，始皇）",
+      "keywords": ["你们赢了", "赢了", "没有输", "程序员", "code", "coding", "victory", "defeat", "meme", "始皇", "emperor", "qin", "shi", "huang"]
+    },
+    {
+      "packet": 25,
+      "name": "方块爆炸",
+      "url": "https://linux.do/uploads/default/original/4X/b/7/c/b7c6831c3db108491cbc02cbc7ded36c7bff09ed.gif",
+      "alt": "始皇，方块，爆炸",
+      "keywords": ["方块", "爆炸", "游戏", "block", "explode", "minecraft", "game", "boom", "始皇", "emperor", "qin", "shi", "huang"]
+    },
+    {
+      "packet": 26,
+      "name": "害怕",
+      "url": "https://linux.do/uploads/default/original/4X/f/e/e/fee7a1a8a6315ac08a66ca07eedec3517c9e0fb3.gif",
+      "alt": "始皇害怕",
+      "keywords": ["害怕", "恐惧", "惊恐", "scared", "afraid", "fear", "terrified", "panic", "frightened", "始皇", "emperor", "qin", "shi", "huang"]
+    },
+    {
+      "packet": 27,
+      "name": "哭泣",
+      "url": "https://linux.do/uploads/default/original/4X/d/6/0/d60134b2fab045fd1e41d6ac4e0165623cedafb2.gif",
+      "alt": "始皇哭泣",
+      "keywords": ["哭泣", "悲伤", "伤心", "哭", "cry", "weep", "grief", "sorrowful", "sad", "tears", "始皇", "emperor", "qin", "shi", "huang"]
     }
   ]
 }
