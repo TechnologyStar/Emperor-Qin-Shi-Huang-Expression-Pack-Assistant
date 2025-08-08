@@ -1065,88 +1065,92 @@
                 return true;
             }
         } catch(e){ EH_LOG.w('clipboard write failed', e); }
-        // fallback: copy dataURL text
+        // fallback: 直接下载文件
         try {
-            const reader = new FileReader();
-            const dataUrl = await new Promise(res => { reader.onload = () => res(reader.result); reader.readAsDataURL(blob); });
-            const ta = document.createElement('textarea'); ta.value = dataUrl; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'emoji-' + Date.now() + (blob.type.includes('gif') ? '.gif' : '.png');
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 3000);
             return true;
-        } catch(e){ EH_LOG.e('fallback copy failed', e); return false; }
-    }
+        } catch(e){ EH_LOG.e('fallback download failed', e); return false; }
 
-    /* 主流程：给 imageUrl（gif 或 静态）加文字并返回 Blob */
-    async function addTextToImageOrGifAndExport(imageUrl, text, options = { fontSize: 36, fontFamily: 'Arial', color: '#fff', position: 'bottom' }){
-        //await eh_ensureLibs();
-        const objectUrl = await eh_loadImageObjectURL(imageUrl);
-        const isGif = /\.gif($|\?)/i.test(imageUrl) || (objectUrl && objectUrl.startsWith('blob:') && /\.gif($|\?)/i.test(imageUrl));
-        if (isGif) {
-            let ab;
-            try { ab = await eh_gmFetchArrayBuffer(imageUrl); }
-            catch(e) { const resp = await fetch(objectUrl); ab = await resp.arrayBuffer(); }
-            const frames = eh_parseGifFramesFromArrayBuffer(ab);
-            const canvases = eh_framesToCanvases(frames);
-            const delays = frames.map(f => (f.delay || 10) * 10);
-            canvases.forEach(c => eh_drawTextOnCanvas(c, text, options));
-            const blob = await eh_encodeGifWithLimit(canvases, delays, { maxBytes: 5*1024*1024, quality: 12, maxWidth: 480, maxHeight: 480 });
-            return blob;
-        } else {
-            const img = new Image();
-            img.crossOrigin = 'anonymous';
-            img.src = objectUrl || imageUrl;
-            await new Promise((res, rej)=>{ img.onload = res; img.onerror = ()=>rej(new Error('image load fail')); });
-            const maxW = 1024, maxH = 1024;
-            let w = img.naturalWidth, h = img.naturalHeight;
-            const r = Math.min(1, Math.min(maxW / w, maxH / h));
-            w = Math.round(w * r); h = Math.round(h * r);
-            const c = document.createElement('canvas'); c.width = w; c.height = h;
-            const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
-            eh_drawTextOnCanvas(c, text, options);
-            const blob = await new Promise(resolve => c.toBlob(resolve, 'image/webp', 0.85));
-            if (blob && blob.size <= 5*1024*1024) return blob;
-            return await new Promise(resolve => c.toBlob(resolve, 'image/png', 0.95));
-        }
-    }
-
-    /* === EH 工具函数 END === */
-
-    // 🎨 文字编辑器
-    const TextEditor = {
-        fonts: [
-            'Arial, sans-serif',
-            'Helvetica, sans-serif',
-            'Georgia, serif',
-            'Times New Roman, serif',
-            'Courier New, monospace',
-            'Verdana, sans-serif',
-            'Impact, sans-serif',
-            'Comic Sans MS, cursive',
-            'Trebuchet MS, sans-serif',
-            'Arial Black, sans-serif',
-            'Microsoft YaHei, sans-serif',
-            'SimHei, sans-serif',
-            'SimSun, serif',
-            'KaiTi, serif'
-        ],
-
-        open(imageUrl) {
-            currentEditingImage = imageUrl;
-            Logger.info('UI', '打开文字编辑器', imageUrl);
-            this.createEditor();
-            this.showEditor();
-        },
-
-        createEditor() {
-            if (textEditorPanel) {
-                textEditorPanel.remove();
-                Logger.debug('UI', '移除旧的编辑器面板');
+        }/* 主流程：给 imageUrl（gif 或 静态）加文字并返回 Blob */
+        async function addTextToImageOrGifAndExport(imageUrl, text, options = { fontSize: 36, fontFamily: 'Arial', color: '#fff', position: 'bottom' }){
+            //await eh_ensureLibs();
+            const objectUrl = await eh_loadImageObjectURL(imageUrl);
+            const isGif = /\.gif($|\?)/i.test(imageUrl) || (objectUrl && objectUrl.startsWith('blob:') && /\.gif($|\?)/i.test(imageUrl));
+            if (isGif) {
+                let ab;
+                try { ab = await eh_gmFetchArrayBuffer(imageUrl); }
+                catch(e) { const resp = await fetch(objectUrl); ab = await resp.arrayBuffer(); }
+                const frames = eh_parseGifFramesFromArrayBuffer(ab);
+                const canvases = eh_framesToCanvases(frames);
+                const delays = frames.map(f => (f.delay || 10) * 10);
+                canvases.forEach(c => eh_drawTextOnCanvas(c, text, options));
+                const blob = await eh_encodeGifWithLimit(canvases, delays, { maxBytes: 5*1024*1024, quality: 12, maxWidth: 480, maxHeight: 480 });
+                return blob;
+            } else {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.src = objectUrl || imageUrl;
+                await new Promise((res, rej)=>{ img.onload = res; img.onerror = ()=>rej(new Error('image load fail')); });
+                const maxW = 1024, maxH = 1024;
+                let w = img.naturalWidth, h = img.naturalHeight;
+                const r = Math.min(1, Math.min(maxW / w, maxH / h));
+                w = Math.round(w * r); h = Math.round(h * r);
+                const c = document.createElement('canvas'); c.width = w; c.height = h;
+                const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
+                eh_drawTextOnCanvas(c, text, options);
+                const blob = await new Promise(resolve => c.toBlob(resolve, 'image/webp', 0.85));
+                if (blob && blob.size <= 5*1024*1024) return blob;
+                return await new Promise(resolve => c.toBlob(resolve, 'image/png', 0.95));
             }
+        }
 
-            const lang = t();
-            const panel = document.createElement('div');
-            panel.className = 'emoji-helper-text-editor';
-            panel.id = 'emoji-helper-text-editor';
+        /* === EH 工具函数 END === */
 
-            panel.innerHTML = `
+        // 🎨 文字编辑器
+        const TextEditor = {
+            fonts: [
+                'Arial, sans-serif',
+                'Helvetica, sans-serif',
+                'Georgia, serif',
+                'Times New Roman, serif',
+                'Courier New, monospace',
+                'Verdana, sans-serif',
+                'Impact, sans-serif',
+                'Comic Sans MS, cursive',
+                'Trebuchet MS, sans-serif',
+                'Arial Black, sans-serif',
+                'Microsoft YaHei, sans-serif',
+                'SimHei, sans-serif',
+                'SimSun, serif',
+                'KaiTi, serif'
+            ],
+
+            open(imageUrl) {
+                currentEditingImage = imageUrl;
+                Logger.info('UI', '打开文字编辑器', imageUrl);
+                this.createEditor();
+                this.showEditor();
+            },
+
+            createEditor() {
+                if (textEditorPanel) {
+                    textEditorPanel.remove();
+                    Logger.debug('UI', '移除旧的编辑器面板');
+                }
+
+                const lang = t();
+                const panel = document.createElement('div');
+                panel.className = 'emoji-helper-text-editor';
+                panel.id = 'emoji-helper-text-editor';
+
+                panel.innerHTML = `
                 <div class="emoji-helper-header draggable-header">
                     <div class="emoji-helper-title">${lang.textEditor.title}</div>
                     <button class="emoji-helper-btn close text-editor-close">×</button>
@@ -1555,227 +1559,227 @@
         }
     };
 
-    // 🔍 网络GIF搜索 API
-    const GifSearchAPI = {
-        async searchGifs(query, limit = 12) {
-            const searchEngine = Config.get('searchEngine');
-            const cacheKey = `${searchEngine}-${query}`;
+        // 🔍 网络GIF搜索 API
+        const GifSearchAPI = {
+            async searchGifs(query, limit = 12) {
+                const searchEngine = Config.get('searchEngine');
+                const cacheKey = `${searchEngine}-${query}`;
 
-            if (CacheManager.has(cacheKey, 'search')) {
-                Logger.debug('SEARCH', '使用缓存结果', { query, engine: searchEngine });
-                return CacheManager.get(cacheKey, 'search');
-            }
+                if (CacheManager.has(cacheKey, 'search')) {
+                    Logger.debug('SEARCH', '使用缓存结果', { query, engine: searchEngine });
+                    return CacheManager.get(cacheKey, 'search');
+                }
 
-            try {
-                Logger.info('SEARCH', '开始搜索GIF', { query, engine: searchEngine, limit });
-                const results = await this.callAPI(query, limit);
+                try {
+                    Logger.info('SEARCH', '开始搜索GIF', { query, engine: searchEngine, limit });
+                    const results = await this.callAPI(query, limit);
 
-                CacheManager.set(cacheKey, results, 'search');
+                    CacheManager.set(cacheKey, results, 'search');
 
-                Logger.info('SEARCH', '搜索成功', {
-                    query,
-                    engine: searchEngine,
-                    resultCount: results.length
-                });
-                return results;
-            } catch (error) {
-                Logger.error('SEARCH', '搜索失败', { query, engine: searchEngine, error });
-                return [];
-            }
-        },
+                    Logger.info('SEARCH', '搜索成功', {
+                        query,
+                        engine: searchEngine,
+                        resultCount: results.length
+                    });
+                    return results;
+                } catch (error) {
+                    Logger.error('SEARCH', '搜索失败', { query, engine: searchEngine, error });
+                    return [];
+                }
+            },
 
-        async callAPI(query, limit) {
-            const searchEngine = Config.get('searchEngine');
+            async callAPI(query, limit) {
+                const searchEngine = Config.get('searchEngine');
 
-            return new Promise((resolve, reject) => {
-                const apiUrl = this.getApiUrl(searchEngine, query, limit);
-                Logger.debug('SEARCH', '调用API', { url: apiUrl });
+                return new Promise((resolve, reject) => {
+                    const apiUrl = this.getApiUrl(searchEngine, query, limit);
+                    Logger.debug('SEARCH', '调用API', { url: apiUrl });
 
-                const timeout = setTimeout(() => {
-                    reject(new Error('API请求超时'));
-                }, 20000);
+                    const timeout = setTimeout(() => {
+                        reject(new Error('API请求超时'));
+                    }, 20000);
 
-                GM_xmlhttpRequest({
-                    method: 'GET',
-                    url: apiUrl,
-                    timeout: 20000,
-                    onload: (response) => {
-                        clearTimeout(timeout);
-                        try {
-                            Logger.debug('SEARCH', 'API响应状态', response.status);
-                            const data = JSON.parse(response.responseText);
-                            const gifs = this.parseResponse(searchEngine, data);
-                            Logger.debug('SEARCH', 'API解析完成', { gifCount: gifs.length });
-                            resolve(gifs);
-                        } catch (e) {
-                            Logger.error('SEARCH', '解析响应失败', e);
-                            reject(e);
+                    GM_xmlhttpRequest({
+                        method: 'GET',
+                        url: apiUrl,
+                        timeout: 20000,
+                        onload: (response) => {
+                            clearTimeout(timeout);
+                            try {
+                                Logger.debug('SEARCH', 'API响应状态', response.status);
+                                const data = JSON.parse(response.responseText);
+                                const gifs = this.parseResponse(searchEngine, data);
+                                Logger.debug('SEARCH', 'API解析完成', { gifCount: gifs.length });
+                                resolve(gifs);
+                            } catch (e) {
+                                Logger.error('SEARCH', '解析响应失败', e);
+                                reject(e);
+                            }
+                        },
+                        onerror: (error) => {
+                            clearTimeout(timeout);
+                            Logger.error('SEARCH', 'API请求失败', error);
+                            reject(error);
+                        },
+                        ontimeout: () => {
+                            clearTimeout(timeout);
+                            Logger.error('SEARCH', 'API请求超时');
+                            reject(new Error('请求超时'));
                         }
-                    },
-                    onerror: (error) => {
-                        clearTimeout(timeout);
-                        Logger.error('SEARCH', 'API请求失败', error);
-                        reject(error);
-                    },
-                    ontimeout: () => {
-                        clearTimeout(timeout);
-                        Logger.error('SEARCH', 'API请求超时');
-                        reject(new Error('请求超时'));
-                    }
+                    });
                 });
-            });
-        },
+            },
 
-        getApiUrl(searchEngine, query, limit) {
-            const encodedQuery = encodeURIComponent(query);
+            getApiUrl(searchEngine, query, limit) {
+                const encodedQuery = encodeURIComponent(query);
 
-            switch (searchEngine) {
-                case 'giphy':
-                    return `https://api.giphy.com/v1/gifs/search?api_key=dc6zaTOxFJmzC&q=${encodedQuery}&limit=${limit}&rating=g&lang=zh`;
-                case 'tenor':
-                    return `https://tenor.googleapis.com/v2/search?key=AIzaSyAyimkuYQYF_FXVALexPuGQctUWRURdCl0&q=${encodedQuery}&limit=${limit}&media_filter=gif&contentfilter=high`;
-                default:
-                    return `https://api.giphy.com/v1/gifs/search?api_key=GlVGYHkr3WSBnllca54iNt0yFbjz7L65&q=${encodedQuery}&limit=${limit}&rating=g`;
-            }
-        },
-
-        parseResponse(searchEngine, data) {
-            try {
                 switch (searchEngine) {
                     case 'giphy':
-                        return (data.data || []).map(gif => ({
-                            id: gif.id,
-                            title: gif.title || 'GIF',
-                            url: gif.images.fixed_height_small?.url || gif.images.original?.url,
-                            previewUrl: gif.images.preview_gif?.url || gif.images.fixed_height_small?.url,
-                            width: gif.images.fixed_height_small?.width || 200,
-                            height: gif.images.fixed_height_small?.height || 200
-                        }));
+                        return `https://api.giphy.com/v1/gifs/search?api_key=dc6zaTOxFJmzC&q=${encodedQuery}&limit=${limit}&rating=g&lang=zh`;
                     case 'tenor':
-                        return (data.results || []).map(gif => ({
-                            id: gif.id,
-                            title: gif.content_description || 'GIF',
-                            url: gif.media_formats?.gif?.url || gif.media_formats?.tinygif?.url,
-                            previewUrl: gif.media_formats?.tinygif?.url || gif.media_formats?.gif?.url,
-                            width: gif.media_formats?.gif?.dims?.[0] || 200,
-                            height: gif.media_formats?.gif?.dims?.[1] || 200
-                        }));
+                        return `https://tenor.googleapis.com/v2/search?key=AIzaSyAyimkuYQYF_FXVALexPuGQctUWRURdCl0&q=${encodedQuery}&limit=${limit}&media_filter=gif&contentfilter=high`;
                     default:
-                        return [];
+                        return `https://api.giphy.com/v1/gifs/search?api_key=GlVGYHkr3WSBnllca54iNt0yFbjz7L65&q=${encodedQuery}&limit=${limit}&rating=g`;
                 }
-            } catch (e) {
-                Logger.error('SEARCH', '解析失败', e);
-                return [];
+            },
+
+            parseResponse(searchEngine, data) {
+                try {
+                    switch (searchEngine) {
+                        case 'giphy':
+                            return (data.data || []).map(gif => ({
+                                id: gif.id,
+                                title: gif.title || 'GIF',
+                                url: gif.images.fixed_height_small?.url || gif.images.original?.url,
+                                previewUrl: gif.images.preview_gif?.url || gif.images.fixed_height_small?.url,
+                                width: gif.images.fixed_height_small?.width || 200,
+                                height: gif.images.fixed_height_small?.height || 200
+                            }));
+                        case 'tenor':
+                            return (data.results || []).map(gif => ({
+                                id: gif.id,
+                                title: gif.content_description || 'GIF',
+                                url: gif.media_formats?.gif?.url || gif.media_formats?.tinygif?.url,
+                                previewUrl: gif.media_formats?.tinygif?.url || gif.media_formats?.gif?.url,
+                                width: gif.media_formats?.gif?.dims?.[0] || 200,
+                                height: gif.media_formats?.gif?.dims?.[1] || 200
+                            }));
+                        default:
+                            return [];
+                    }
+                } catch (e) {
+                    Logger.error('SEARCH', '解析失败', e);
+                    return [];
+                }
+            }
+        };
+
+        // 拖拽管理器
+        const DragManager = {
+            makeDraggable(element, handle) {
+                const dragHandle = handle || element.querySelector('.draggable-header') || element.querySelector('.emoji-helper-header');
+                if (!dragHandle) return;
+
+                let isDragging = false;
+                let startX = 0;
+                let startY = 0;
+                let initialX = 0;
+                let initialY = 0;
+
+                const handleMouseDown = (e) => {
+                    if (e.target.classList.contains('close') || e.target.classList.contains('emoji-helper-btn')) return;
+
+                    isDragging = true;
+                    dragHandle.style.cursor = 'grabbing';
+
+                    const rect = element.getBoundingClientRect();
+                    startX = e.clientX;
+                    startY = e.clientY;
+                    initialX = rect.left;
+                    initialY = rect.top;
+
+                    e.preventDefault();
+                    Logger.trace('UI', '开始拖拽面板', element.id);
+                };
+
+                const handleMouseMove = (e) => {
+                    if (!isDragging) return;
+
+                    const deltaX = e.clientX - startX;
+                    const deltaY = e.clientY - startY;
+
+                    let newX = initialX + deltaX;
+                    let newY = initialY + deltaY;
+
+                    newX = Math.max(0, Math.min(window.innerWidth - element.offsetWidth, newX));
+                    newY = Math.max(0, Math.min(window.innerHeight - element.offsetHeight, newY));
+
+                    element.style.left = newX + 'px';
+                    element.style.top = newY + 'px';
+                    element.style.right = 'auto';
+                    element.style.bottom = 'auto';
+
+                    if (element.id === 'emoji-helper-main-panel') {
+                        Config.set('panelPosition', { x: newX, y: newY });
+                    } else if (element.id === 'emoji-helper-settings-panel') {
+                        Config.set('settingsPanelPosition', { x: newX, y: newY });
+                    }
+                };
+
+                const handleMouseUp = () => {
+                    if (isDragging) {
+                        isDragging = false;
+                        dragHandle.style.cursor = 'grab';
+                        Logger.trace('UI', '结束拖拽面板', element.id);
+                    }
+                };
+
+                dragHandle.addEventListener('mousedown', handleMouseDown);
+                document.addEventListener('mousemove', handleMouseMove);
+                document.addEventListener('mouseup', handleMouseUp);
+
+                dragHandle.style.cursor = 'grab';
+                dragHandle.style.userSelect = 'none';
+            }
+        };
+
+        // 浮动按钮显示控制
+        function updateFloatingButtonVisibility() {
+            if (floatingButton) {
+                const show = Config.get('showFloatingButton');
+                floatingButton.style.display = show ? 'flex' : 'none';
+                Logger.debug('UI', '更新浮动按钮显示状态', show);
             }
         }
-    };
 
-    // 拖拽管理器
-    const DragManager = {
-        makeDraggable(element, handle) {
-            const dragHandle = handle || element.querySelector('.draggable-header') || element.querySelector('.emoji-helper-header');
-            if (!dragHandle) return;
-
-            let isDragging = false;
-            let startX = 0;
-            let startY = 0;
-            let initialX = 0;
-            let initialY = 0;
-
-            const handleMouseDown = (e) => {
-                if (e.target.classList.contains('close') || e.target.classList.contains('emoji-helper-btn')) return;
-
-                isDragging = true;
-                dragHandle.style.cursor = 'grabbing';
-
-                const rect = element.getBoundingClientRect();
-                startX = e.clientX;
-                startY = e.clientY;
-                initialX = rect.left;
-                initialY = rect.top;
-
-                e.preventDefault();
-                Logger.trace('UI', '开始拖拽面板', element.id);
-            };
-
-            const handleMouseMove = (e) => {
-                if (!isDragging) return;
-
-                const deltaX = e.clientX - startX;
-                const deltaY = e.clientY - startY;
-
-                let newX = initialX + deltaX;
-                let newY = initialY + deltaY;
-
-                newX = Math.max(0, Math.min(window.innerWidth - element.offsetWidth, newX));
-                newY = Math.max(0, Math.min(window.innerHeight - element.offsetHeight, newY));
-
-                element.style.left = newX + 'px';
-                element.style.top = newY + 'px';
-                element.style.right = 'auto';
-                element.style.bottom = 'auto';
-
-                if (element.id === 'emoji-helper-main-panel') {
-                    Config.set('panelPosition', { x: newX, y: newY });
-                } else if (element.id === 'emoji-helper-settings-panel') {
-                    Config.set('settingsPanelPosition', { x: newX, y: newY });
-                }
-            };
-
-            const handleMouseUp = () => {
-                if (isDragging) {
-                    isDragging = false;
-                    dragHandle.style.cursor = 'grab';
-                    Logger.trace('UI', '结束拖拽面板', element.id);
-                }
-            };
-
-            dragHandle.addEventListener('mousedown', handleMouseDown);
-            document.addEventListener('mousemove', handleMouseMove);
-            document.addEventListener('mouseup', handleMouseUp);
-
-            dragHandle.style.cursor = 'grab';
-            dragHandle.style.userSelect = 'none';
+        // 更新面板位置
+        function updatePanelPosition() {
+            if (emojiPanel) {
+                const pos = Config.get('panelPosition');
+                emojiPanel.style.left = pos.x + 'px';
+                emojiPanel.style.top = pos.y + 'px';
+                emojiPanel.style.right = 'auto';
+                emojiPanel.style.bottom = 'auto';
+                Logger.trace('UI', '更新主面板位置', pos);
+            }
         }
-    };
 
-    // 浮动按钮显示控制
-    function updateFloatingButtonVisibility() {
-        if (floatingButton) {
-            const show = Config.get('showFloatingButton');
-            floatingButton.style.display = show ? 'flex' : 'none';
-            Logger.debug('UI', '更新浮动按钮显示状态', show);
+        function updateSettingsPanelPosition() {
+            if (settingsPanel) {
+                const pos = Config.get('settingsPanelPosition');
+                settingsPanel.style.left = pos.x + 'px';
+                settingsPanel.style.top = pos.y + 'px';
+                settingsPanel.style.right = 'auto';
+                settingsPanel.style.bottom = 'auto';
+                Logger.trace('UI', '更新设置面板位置', pos);
+            }
         }
-    }
 
-    // 更新面板位置
-    function updatePanelPosition() {
-        if (emojiPanel) {
-            const pos = Config.get('panelPosition');
-            emojiPanel.style.left = pos.x + 'px';
-            emojiPanel.style.top = pos.y + 'px';
-            emojiPanel.style.right = 'auto';
-            emojiPanel.style.bottom = 'auto';
-            Logger.trace('UI', '更新主面板位置', pos);
-        }
-    }
+        // 继续添加其余代码...
+        // (由于长度限制，我需要分几个部分来完成。这是第一部分的修复版本)
 
-    function updateSettingsPanelPosition() {
-        if (settingsPanel) {
-            const pos = Config.get('settingsPanelPosition');
-            settingsPanel.style.left = pos.x + 'px';
-            settingsPanel.style.top = pos.y + 'px';
-            settingsPanel.style.right = 'auto';
-            settingsPanel.style.bottom = 'auto';
-            Logger.trace('UI', '更新设置面板位置', pos);
-        }
-    }
-
-    // 继续添加其余代码...
-    // (由于长度限制，我需要分几个部分来完成。这是第一部分的修复版本)
-
-    // 🎨 样式（全面优化UI）
-    GM_addStyle(`
+        // 🎨 样式（全面优化UI）
+        GM_addStyle(`
         :root {
             --eh-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             --eh-border-radius: 12px;
@@ -2085,6 +2089,9 @@
             display: none;
             flex-direction: column;
             overflow: hidden;
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+
         }
 
         .emoji-helper-settings-panel.show {
