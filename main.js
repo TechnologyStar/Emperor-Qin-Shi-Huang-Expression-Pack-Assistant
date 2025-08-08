@@ -899,6 +899,215 @@
             return await this.checkAndUpdate(true);
         }
     };
+    /* === EH 工具函数 BEGIN === */
+    // 外部库地址
+    const EH_GIF_JS = 'https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.min.js';
+    const EH_GIF_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.min.js';
+    const EH_GIFUCT_JS = 'https://cdn.jsdelivr.net/npm/gifuct-js@1.0.2/dist/gifuct.min.js';
+
+    // 简单日志别名
+    const EH_LOG = { i: (...a)=>console.info('[EH]',...a), w:(...a)=>console.warn('[EH]',...a), e:(...a)=>console.error('[EH]',...a) };
+
+    // 动态载入脚本（一次）
+    async function eh_loadScriptOnce(url){
+        if (window.__eh_loadedLibs && window.__eh_loadedLibs[url]) return;
+        await new Promise((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = url;
+            s.crossOrigin = 'anonymous';
+            s.onload = () => { window.__eh_loadedLibs = window.__eh_loadedLibs || {}; window.__eh_loadedLibs[url] = true; resolve(); };
+            s.onerror = (err) => { EH_LOG.w('load lib fail', url, err); reject(err); };
+            document.head.appendChild(s);
+        });
+    }
+
+    // 确保所需库已经加载
+    async function eh_ensureLibs(){
+        if (!window.GIF) await eh_loadScriptOnce(EH_GIF_JS);
+        if (!window.gifuct) await eh_loadScriptOnce(EH_GIFUCT_JS);
+        try { if (window.GIF && !window.GIF.prototype.workerScript) window.GIF.prototype.workerScript = EH_GIF_WORKER; } catch(e){ EH_LOG.w('set workerScript fail', e); }
+    }
+
+    // GM 跨域获取 ArrayBuffer（用于绕过 CORS）
+    function eh_gmFetchArrayBuffer(url, timeout=20000){
+        return new Promise((resolve, reject) => {
+            try {
+                GM_xmlhttpRequest({
+                    method: 'GET',
+                    url,
+                    responseType: 'arraybuffer',
+                    timeout,
+                    onload(res){ if (res.status >= 200 && res.status < 300) resolve(res.response); else reject(new Error('HTTP ' + res.status)); },
+                    onerror(err){ reject(err); },
+                    ontimeout(){ reject(new Error('timeout')); }
+                });
+            } catch(e) { reject(e); }
+        });
+    }
+
+    // ArrayBuffer -> objectURL
+    function eh_arrayBufferToObjectURL(ab, mime='image/gif'){
+        const blob = new Blob([ab], { type: mime });
+        return URL.createObjectURL(blob);
+    }
+
+    // 尝试用 GM 请求获取资源并返回 objectURL，失败回退原 url
+    async function eh_loadImageObjectURL(url){
+        try {
+            const ab = await eh_gmFetchArrayBuffer(url);
+            let mime = 'image/gif';
+            if (/\.jpe?g($|\?)/i.test(url)) mime = 'image/jpeg';
+            if (/\.png($|\?)/i.test(url)) mime = 'image/png';
+            if (/\.webp($|\?)/i.test(url)) mime = 'image/webp';
+            return eh_arrayBufferToObjectURL(ab, mime);
+        } catch (err) {
+            EH_LOG.w('GM fetch failed, fallback to direct URL', err);
+            return url;
+        }
+    }
+
+    // 用 gifuct-js 解析 GIF 帧
+    function eh_parseGifFramesFromArrayBuffer(ab){
+        const parsed = window.gifuct.parseGIF(ab);
+        const frames = window.gifuct.decompressFrames(parsed, true);
+        return frames;
+    }
+
+    // 将 gifuct-js 的帧合成为全帧 Canvas 列表（简单处理 disposalType==2）
+    function eh_framesToCanvases(frames){
+        const W = frames[0].dims.width;
+        const H = frames[0].dims.height;
+        const base = document.createElement('canvas'); base.width = W; base.height = H;
+        const ctx = base.getContext('2d');
+        ctx.clearRect(0,0,W,H);
+        const out = [];
+        frames.forEach(frame => {
+            const { left, top, width: w, height: h } = frame.dims;
+            try {
+                const patch = new ImageData(new Uint8ClampedArray(frame.patch), w, h);
+                ctx.putImageData(patch, left, top);
+            } catch(e) {
+                EH_LOG.w('putImageData failed', e);
+            }
+            const c = document.createElement('canvas'); c.width = W; c.height = H;
+            c.getContext('2d').drawImage(base, 0, 0);
+            out.push(c);
+            if (frame.disposalType === 2) {
+                ctx.clearRect(left, top, w, h);
+            }
+        });
+        return out;
+    }
+
+    function eh_scaleFrameCanvas(canvas, scale, maxW = 480, maxH = 480){
+        const w = Math.min(Math.round(canvas.width * scale), maxW);
+        const h = Math.min(Math.round(canvas.height * scale), maxH);
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        c.getContext('2d').drawImage(canvas, 0, 0, w, h);
+        return c;
+    }
+
+    function eh_drawTextOnCanvas(canvas, text, opts = { fontSize: 36, fontFamily: 'Arial, sans-serif', color: '#fff', stroke: '#000', position: 'bottom' }){
+        const ctx = canvas.getContext('2d');
+        ctx.save();
+        const scaleRef = Math.max(1, canvas.width / 400);
+        const fs = Math.round(opts.fontSize * scaleRef);
+        ctx.font = `bold ${fs}px ${opts.fontFamily}`;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = opts.color || '#fff';
+        ctx.strokeStyle = opts.stroke || '#000';
+        ctx.lineWidth = Math.max(2, fs / 18);
+        let x = Math.round(canvas.width / 2);
+        let y;
+        if (opts.position === 'top') y = fs + 10;
+        else if (opts.position === 'center') y = Math.round(canvas.height / 2 + fs / 3);
+        else y = canvas.height - 10;
+        ctx.strokeText(text, x, y);
+        ctx.fillText(text, x, y);
+        ctx.restore();
+    }
+
+    // 使用 gif.js 编码 frames (canvas[]) -> Blob
+    function eh_encodeWithGifJs(frames, delays, { quality = 12, repeat = 0 } = {}){
+        return new Promise(async (resolve, reject) => {
+            await eh_ensureLibs();
+            try {
+                const gif = new GIF({ workers: 2, quality, repeat, workerScript: EH_GIF_WORKER });
+                frames.forEach((c, i) => gif.addFrame(c, { delay: delays[i] || 100 }));
+                gif.on('finished', blob => resolve(blob));
+                gif.on('error', err => reject(err));
+                gif.render();
+            } catch (e) { reject(e); }
+        });
+    }
+
+    // 迭代尝试不同缩放比以控制输出大小（maxBytes，默认 5MB）
+    async function eh_encodeGifWithLimit(frames, delays, { maxBytes = 5*1024*1024, quality = 12, repeat = 0, maxWidth = 480, maxHeight = 480 } = {}){
+        let scale = 1.0;
+        let lastBlob = null;
+        for (let i=0;i<6;i++){
+            const scaled = frames.map(f => eh_scaleFrameCanvas(f, scale, maxWidth, maxHeight));
+            const blob = await eh_encodeWithGifJs(scaled, delays, { quality, repeat });
+            lastBlob = blob;
+            EH_LOG.i('encode try', i, 'scale', scale, 'size', blob.size);
+            if (blob.size <= maxBytes) return blob;
+            scale *= 0.8;
+        }
+        return lastBlob;
+    }
+
+    // 复制 Blob 到剪贴板（优先 Clipboard API）
+    async function eh_copyBlobToClipboard(blob){
+        try {
+            if (navigator.clipboard && navigator.clipboard.write) {
+                const item = new ClipboardItem({ [blob.type]: blob });
+                await navigator.clipboard.write([item]);
+                return true;
+            }
+        } catch(e){ EH_LOG.w('clipboard write failed', e); }
+        // fallback: copy dataURL text
+        try {
+            const reader = new FileReader();
+            const dataUrl = await new Promise(res => { reader.onload = () => res(reader.result); reader.readAsDataURL(blob); });
+            const ta = document.createElement('textarea'); ta.value = dataUrl; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+            return true;
+        } catch(e){ EH_LOG.e('fallback copy failed', e); return false; }
+    }
+
+    /* 主流程：给 imageUrl（gif 或 静态）加文字并返回 Blob */
+    async function addTextToImageOrGifAndExport(imageUrl, text, options = { fontSize: 36, fontFamily: 'Arial', color: '#fff', position: 'bottom' }){
+        //await eh_ensureLibs();
+        const objectUrl = await eh_loadImageObjectURL(imageUrl);
+        const isGif = /\.gif($|\?)/i.test(imageUrl) || (objectUrl && objectUrl.startsWith('blob:') && /\.gif($|\?)/i.test(imageUrl));
+        if (isGif) {
+            let ab;
+            try { ab = await eh_gmFetchArrayBuffer(imageUrl); }
+            catch(e) { const resp = await fetch(objectUrl); ab = await resp.arrayBuffer(); }
+            const frames = eh_parseGifFramesFromArrayBuffer(ab);
+            const canvases = eh_framesToCanvases(frames);
+            const delays = frames.map(f => (f.delay || 10) * 10);
+            canvases.forEach(c => eh_drawTextOnCanvas(c, text, options));
+            const blob = await eh_encodeGifWithLimit(canvases, delays, { maxBytes: 5*1024*1024, quality: 12, maxWidth: 480, maxHeight: 480 });
+            return blob;
+        } else {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.src = objectUrl || imageUrl;
+            await new Promise((res, rej)=>{ img.onload = res; img.onerror = ()=>rej(new Error('image load fail')); });
+            const maxW = 1024, maxH = 1024;
+            let w = img.naturalWidth, h = img.naturalHeight;
+            const r = Math.min(1, Math.min(maxW / w, maxH / h));
+            w = Math.round(w * r); h = Math.round(h * r);
+            const c = document.createElement('canvas'); c.width = w; c.height = h;
+            const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
+            eh_drawTextOnCanvas(c, text, options);
+            const blob = await new Promise(resolve => c.toBlob(resolve, 'image/webp', 0.85));
+            if (blob && blob.size <= 5*1024*1024) return blob;
+            return await new Promise(resolve => c.toBlob(resolve, 'image/png', 0.95));
+        }
+    }
+
+    /* === EH 工具函数 END === */
 
     // 🎨 文字编辑器
     const TextEditor = {
@@ -1100,72 +1309,45 @@
 
             canvas.addEventListener('dragstart', (e) => {
                 canvas.style.cursor = 'grabbing';
-                Logger.debug('UI', '开始拖拽图片');
-
                 canvas.toBlob((blob) => {
-                    if (blob) {
-                        const objectURL = URL.createObjectURL(blob);
-
-                        const tempImg = document.createElement('img');
-                        tempImg.src = objectURL;
-                        tempImg.style.position = 'absolute';
-                        tempImg.style.left = '-9999px';
-                        tempImg.style.top = '-9999px';
-                        document.body.appendChild(tempImg);
-
-                        e.dataTransfer.clearData();
-                        e.dataTransfer.setData('text/uri-list', objectURL);
-                        e.dataTransfer.setData('text/html', `<img src="${objectURL}" style="max-width: 200px; height: auto;">`);
-                        e.dataTransfer.setData('text/plain', objectURL);
+                    if (!blob) return;
+                    const filename = 'emoji-text-' + Date.now() + (blob.type.includes('gif') ? '.gif' : '.png');
+                    const objectURL = URL.createObjectURL(blob);
+                    try {
+                        e.dataTransfer.setData('DownloadURL', `${blob.type}:${filename}:${objectURL}`);
+                        e.dataTransfer.setData('text/plain', filename);
                         e.dataTransfer.effectAllowed = 'copy';
-
-                        const dragImg = new Image();
-                        dragImg.onload = () => {
-                            e.dataTransfer.setDragImage(dragImg, dragImg.width / 2, dragImg.height / 2);
-                        };
-                        dragImg.src = objectURL;
-
-                        Logger.debug('UI', '拖拽数据设置完成', { blobSize: blob.size, objectURL });
-
-                        setTimeout(() => {
-                            if (tempImg.parentNode) {
-                                tempImg.parentNode.removeChild(tempImg);
-                            }
-                            URL.revokeObjectURL(objectURL);
-                            Logger.trace('UI', '清理拖拽临时资源');
-                        }, 1000);
+                    } catch (err) {
+                        console.warn('dragset failed', err);
                     }
+                    const dragImg = new Image();
+                    dragImg.onload = () => e.dataTransfer.setDragImage(dragImg, dragImg.width / 2, dragImg.height / 2);
+                    dragImg.src = objectURL;
+                    setTimeout(() => { URL.revokeObjectURL(objectURL); }, 3000);
                 }, 'image/png', 0.95);
             });
 
             canvas.addEventListener('dragend', () => {
                 canvas.style.cursor = 'grab';
-                Logger.debug('UI', '拖拽结束');
             });
 
             canvas.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
-                Logger.debug('UI', '右键复制图片');
-
-                if (navigator.clipboard && navigator.clipboard.write) {
-                    canvas.toBlob((blob) => {
-                        if (blob) {
-                            navigator.clipboard.write([
-                                new ClipboardItem({ 'image/png': blob })
-                            ]).then(() => {
-                                showMessage(t().messages.copied);
-                                Logger.info('UI', '图片复制成功（Clipboard API）');
-                            }).catch((err) => {
-                                Logger.warn('UI', 'Clipboard API失败，尝试备用方法', err);
-                                this.fallbackCopyMethod(canvas);
-                            });
-                        }
-                    }, 'image/png');
-                } else {
-                    this.fallbackCopyMethod(canvas);
-                }
+                canvas.toBlob(async (blob) => {
+                    if (!blob) return;
+                    try {
+                        const ok = await eh_copyBlobToClipboard(blob);
+                        if (ok) showMessage(t().messages.copied);
+                    } catch (err) {
+                        console.warn('copy failed', err);
+                        const dataURL = canvas.toDataURL('image/png');
+                        const ta = document.createElement('textarea'); ta.value = dataURL; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+                        showMessage(t().messages.copied);
+                    }
+                }, 'image/png', 0.95);
             });
         },
+
 
         fallbackCopyMethod(canvas) {
             try {
@@ -1278,12 +1460,52 @@
             if (textPositionSelect) textPositionSelect.addEventListener('change', this.redrawText.bind(this));
 
             if (generateBtn) {
-                generateBtn.addEventListener('click', () => {
+                generateBtn.addEventListener('click', async () => {
                     this.redrawText();
-                    showMessage(t().messages.imageGenerated);
-                    Logger.info('UI', '图片生成完成');
+                    const text = document.getElementById('text-input')?.value || '';
+                    if (!text) { showMessage('请输入文字'); return; }
+
+                    const fontSize = document.getElementById('font-size-slider')?.value || 36;
+                    const fontFamily = document.getElementById('font-family-select')?.value || 'Arial, sans-serif';
+                    const textColor = document.getElementById('text-color-picker')?.value || '#ffffff';
+                    const position = document.getElementById('text-position-select')?.value || 'bottom';
+
+                    showMessage('生成中，请稍候…');
+                    try {
+                        const blob = await addTextToImageOrGifAndExport(currentEditingImage, text, {
+                            fontSize: parseInt(fontSize, 10),
+                            fontFamily,
+                            color: textColor,
+                            position
+                        });
+
+                        this.lastGeneratedBlob = blob;
+
+                        const downloadBtnElm = document.getElementById('download-btn');
+                        if (downloadBtnElm) {
+                            downloadBtnElm.disabled = false;
+                            downloadBtnElm.onclick = () => {
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = 'emoji-text-' + Date.now() + (blob.type.includes('gif') ? '.gif' : '.png');
+                                document.body.appendChild(a);
+                                a.click();
+                                a.remove();
+                                setTimeout(() => URL.revokeObjectURL(url), 3000);
+                            };
+                        }
+
+                        await eh_copyBlobToClipboard(blob);
+                        showMessage(t().messages.imageGenerated);
+                        Logger.info('UI', '图片生成完成（blob）', { size: blob.size, type: blob.type });
+                    } catch (err) {
+                        Logger.error('UI', '生成失败', err);
+                        showMessage(t().messages.imageError);
+                    }
                 });
             }
+
 
             if (downloadBtn) downloadBtn.addEventListener('click', this.downloadImage.bind(this));
 
@@ -1291,19 +1513,32 @@
         },
 
         downloadImage() {
+            const blob = this.lastGeneratedBlob;
+            if (blob) {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'emoji-text-' + Date.now() + (blob.type.includes('gif') ? '.gif' : '.png');
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 3000);
+                showMessage(t().messages.imageGenerated);
+                Logger.info('UI', '图片下载完成', a.download);
+                return;
+            }
             const canvas = document.getElementById('text-editor-canvas');
             if (!canvas) return;
-
             const link = document.createElement('a');
             link.download = `emoji-with-text-${Date.now()}.png`;
             link.href = canvas.toDataURL('image/png');
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-
             showMessage(t().messages.imageGenerated);
-            Logger.info('UI', '图片下载完成', link.download);
+            Logger.info('UI', '图片下载完成 (canvas fallback)');
         },
+
 
         showEditor() {
             if (textEditorPanel) {
