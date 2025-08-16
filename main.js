@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         表情符号助手 Pro (Emoji Helper Pro)
 // @namespace    https://github.com/TechnologyStar/Emperor-Qin-Shi-Huang-Expression-Pack-Assistant
-// @version      1.1.0
+// @version      1.2.0
 // @description  终极表情助手
 // @author       TechnologyStar
 // @match        *://*/*
@@ -9,7 +9,15 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_xmlhttpRequest
+// @connect        api.giphy.com
+// @connect        tenor.googleapis.com
+// @connect        media.tenor.com
+// @connect        cdnjs.cloudflare.com
+// @connect        cdn.jsdelivr.net
+// @connect        unpkg.com
 
+// @downloadURL https://update.greasyfork.org/scripts/545019/%E8%A1%A8%E6%83%85%E7%AC%A6%E5%8F%B7%E5%8A%A9%E6%89%8B%20Pro%20%28Emoji%20Helper%20Pro%29.user.js
+// @updateURL https://update.greasyfork.org/scripts/545019/%E8%A1%A8%E6%83%85%E7%AC%A6%E5%8F%B7%E5%8A%A9%E6%89%8B%20Pro%20%28Emoji%20Helper%20Pro%29.meta.js
 // ==/UserScript==
 
 (function() {
@@ -297,7 +305,7 @@
             panelPosition: { x: 20, y: 86 },
             settingsPanelPosition: { x: 450, y: 86 },
             editorPosition: { x: 'center', y: 'center' },
-            logLevel: 'DEBUG',
+            logLevel: 'WARN',
             customUpdateUrl: 'https://raw.githubusercontent.com/TechnologyStar/Emperor-Qin-Shi-Huang-Expression-Pack-Assistant/refs/heads/main/neo.json',
             enableDetailedLogs: true,
             cacheSize: 100
@@ -519,7 +527,7 @@
                     center: '居中',
                     bottom: '底部'
                 },
-                generate: '生成图片',
+                generate: '复制图片',
                 download: '下载',
                 close: '关闭',
                 dragHint: '可拖拽到任意位置使用',
@@ -609,7 +617,7 @@
                     center: 'Center',
                     bottom: 'Bottom'
                 },
-                generate: 'Generate Image',
+                generate: 'Copy Image',
                 download: 'Download',
                 close: 'Close',
                 dragHint: 'Draggable to any position',
@@ -662,6 +670,7 @@
     let floatingButton = null;
     let webGifCache = new Map();
     let isSearching = false;
+    let searchRequestId = 0;
     let currentEditingImage = null;
 
     // 拖拽相关变量
@@ -900,31 +909,66 @@
     };
     /* === EH 工具函数 BEGIN === */
     // 外部库地址
-    const EH_GIF_JS = 'https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.min.js';
-    const EH_GIF_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.min.js';
-    const EH_GIFUCT_JS = 'https://cdn.jsdelivr.net/npm/gifuct-js@1.0.2/dist/gifuct.min.js';
+    const EH_GIF_JS_CANDIDATES = [
+        'https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.min.js',
+        'https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.min.js',
+        'https://unpkg.com/gif.js@0.2.0/dist/gif.min.js'
+    ];
+    const EH_GIF_WORKER_CANDIDATES = [
+        'https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.min.js',
+        'https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.min.js',
+        'https://unpkg.com/gif.js@0.2.0/dist/gif.worker.min.js'
+    ];
+    const EH_GIFUCT_JS_CANDIDATES = [
+        'https://cdn.jsdelivr.net/npm/gifuct-js@1.0.2/dist/gifuct.min.js',
+        'https://unpkg.com/gifuct-js@1.0.2/dist/gifuct.min.js'
+    ];
 
     // 简单日志别名
     const EH_LOG = { i: (...a)=>console.info('[EH]',...a), w:(...a)=>console.warn('[EH]',...a), e:(...a)=>console.error('[EH]',...a) };
-
+    function eh_withTimeout(promise, ms = 3000) {
+        return Promise.race([
+            promise,
+            new Promise(resolve => setTimeout(() => resolve('__EH_TIMEOUT__'), ms))
+        ]);
+    }
     // 动态载入脚本（一次）
-    async function eh_loadScriptOnce(url){
-        if (window.__eh_loadedLibs && window.__eh_loadedLibs[url]) return;
-        await new Promise((resolve, reject) => {
-            const s = document.createElement('script');
-            s.src = url;
-            s.crossOrigin = 'anonymous';
-            s.onload = () => { window.__eh_loadedLibs = window.__eh_loadedLibs || {}; window.__eh_loadedLibs[url] = true; resolve(); };
-            s.onerror = (err) => { EH_LOG.w('load lib fail', url, err); reject(err); };
-            document.head.appendChild(s);
-        });
+    async function eh_loadScriptOnce(urlOrList){
+        const urls = Array.isArray(urlOrList) ? urlOrList : [urlOrList];
+        for (const url of urls) {
+            if (window.__eh_loadedLibs && window.__eh_loadedLibs[url]) return;
+            try {
+                await new Promise((resolve, reject) => {
+                    const s = document.createElement('script');
+                    s.src = url;
+                    s.crossOrigin = 'anonymous';
+                    s.onload = () => {
+                        window.__eh_loadedLibs = window.__eh_loadedLibs || {};
+                        window.__eh_loadedLibs[url] = true;
+                        resolve();
+                    };
+                    s.onerror = (err) => { EH_LOG.w('load lib fail', url, err); reject(err); };
+                    document.head.appendChild(s);
+                });
+                return; // 某个候选加载成功，直接结束
+            } catch (e) {
+                // 该源失败，继续尝试下一个
+            }
+        }
+        throw new Error('All CDN sources failed');
     }
 
     // 确保所需库已经加载
     async function eh_ensureLibs(){
-        if (!window.GIF) await eh_loadScriptOnce(EH_GIF_JS);
-        if (!window.gifuct) await eh_loadScriptOnce(EH_GIFUCT_JS);
-        try { if (window.GIF && !window.GIF.prototype.workerScript) window.GIF.prototype.workerScript = EH_GIF_WORKER; } catch(e){ EH_LOG.w('set workerScript fail', e); }
+        if (!window.GIF) await eh_loadScriptOnce(EH_GIF_JS_CANDIDATES);
+        if (!window.gifuct) await eh_loadScriptOnce(EH_GIFUCT_JS_CANDIDATES);
+        try {
+            if (window.GIF) {
+                for (const url of EH_GIF_WORKER_CANDIDATES) {
+                    try { window.GIF.prototype.workerScript = url; break; } catch(e) {}
+                }
+            }
+        } catch(e){ EH_LOG.w('set workerScript fail', e); }
     }
 
     // GM 跨域获取 ArrayBuffer（用于绕过 CORS）
@@ -1031,7 +1075,7 @@
         return new Promise(async (resolve, reject) => {
             await eh_ensureLibs();
             try {
-                const gif = new GIF({ workers: 2, quality, repeat, workerScript: EH_GIF_WORKER });
+                const gif = new GIF({ workers: 2, quality, repeat });
                 frames.forEach((c, i) => gif.addFrame(c, { delay: delays[i] || 100 }));
                 gif.on('finished', blob => resolve(blob));
                 gif.on('error', err => reject(err));
@@ -1056,15 +1100,22 @@
     }
 
     // 复制 Blob 到剪贴板（优先 Clipboard API）
-    async function eh_copyBlobToClipboard(blob, { allowDownload = true } = {}){
+    async function eh_copyBlobToClipboard(blob, { allowDownload = true } = {}) {
+        // 1) 原生写入对应 MIME（若支持 image/gif 就保持动图）
         try {
-            if (navigator.clipboard && navigator.clipboard.write) {
+            if (navigator.clipboard && navigator.clipboard.write && window.ClipboardItem) {
                 const item = new ClipboardItem({ [blob.type]: blob });
                 await navigator.clipboard.write([item]);
                 return true;
             }
-        } catch(e){ EH_LOG.w('clipboard write failed', e); }
-        if (!allowDownload) return false;  // 关键：不允许就别下载
+        } catch (e) {
+            EH_LOG.w('clipboard write failed', e);
+        }
+
+        // 2) ✂️ 删除原逻辑（写入 blob: 文本URL）
+
+        // 3) 仍不行：允许则下载兜底，至少保证得到动图文件
+        if (!allowDownload) return false;
         try {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -1073,11 +1124,14 @@
             document.body.appendChild(a); a.click(); a.remove();
             setTimeout(() => URL.revokeObjectURL(url), 3000);
             return true;
-        } catch(e){ EH_LOG.e('fallback download failed', e); return false; }
+        } catch (e3) {
+            EH_LOG.e('fallback download failed', e3);
+            return false;
+        }
     }
     /* 主流程：给 imageUrl（gif 或 静态）加文字并返回 Blob */
     async function addTextToImageOrGifAndExport(imageUrl, text, options = { fontSize: 36, fontFamily: 'Arial', color: '#fff', position: 'bottom' }){
-        //await eh_ensureLibs();
+        await eh_ensureLibs();
         const objectUrl = await eh_loadImageObjectURL(imageUrl);
         const isGif = /\.gif($|\?)/i.test(imageUrl) || (objectUrl && objectUrl.startsWith('blob:') && /\.gif($|\?)/i.test(imageUrl));
         if (isGif) {
@@ -1108,24 +1162,46 @@
         }
     }
     // 从 URL 拉取图像并转成 PNG Blob（走 GM_xmlhttpRequest，避免 CORS 污染）
-    async function eh_fetchPngBlobFromUrl(imageUrl) {
-        const objectUrl = await eh_loadImageObjectURL(imageUrl); // 现有函数：把远程图变成 blob:URL
-        const img = new Image();
-        img.src = objectUrl;
-        await img.decode();
-        const c = document.createElement('canvas');
-        c.width = img.naturalWidth;
-        c.height = img.naturalHeight;
-        c.getContext('2d').drawImage(img, 0, 0);
-        const pngBlob = await new Promise(res => c.toBlob(res, 'image/png', 0.95));
-        URL.revokeObjectURL(objectUrl);
-        return pngBlob;
+    async function eh_fetchBlobFromUrl(imageUrl) {
+        try {
+            // 先尝试用 GM 直接拿原始二进制并保留 MIME（GIF 动图不会丢帧）
+            const ab = await eh_gmFetchArrayBuffer(imageUrl);
+            let mime = 'application/octet-stream';
+            if (/\.gif($|\?)/i.test(imageUrl)) mime = 'image/gif';
+            else if (/\.png($|\?)/i.test(imageUrl)) mime = 'image/png';
+            else if (/\.jpe?g($|\?)/i.test(imageUrl)) mime = 'image/jpeg';
+            else if (/\.webp($|\?)/i.test(imageUrl)) mime = 'image/webp';
+            return new Blob([ab], { type: mime });
+        } catch (e) {
+            // 回退：静图转 PNG，GIF 仍尽量保持动画（多数浏览器直接 <img> 即可动）
+            const objectUrl = await eh_loadImageObjectURL(imageUrl);
+            const isGif = /\.gif($|\?)/i.test(imageUrl);
+            if (isGif) {
+                // 没有 GM 权限时，尽量把 blob: URL 的数据当作 GIF 交还
+                const resp = await fetch(objectUrl);
+                const buf = await resp.arrayBuffer();
+                URL.revokeObjectURL(objectUrl);
+                return new Blob([buf], { type: 'image/gif' });
+            } else {
+                const img = new Image();
+                img.src = objectUrl;
+                await img.decode();
+                const c = document.createElement('canvas');
+                c.width = img.naturalWidth;
+                c.height = img.naturalHeight;
+                c.getContext('2d').drawImage(img, 0, 0);
+                const pngBlob = await new Promise(res => c.toBlob(res, 'image/png', 0.95));
+                URL.revokeObjectURL(objectUrl);
+                return pngBlob;
+            }
+        }
     }
 
     // 模拟“复制图像”——始终以 PNG 写入剪贴板；失败不下载
     async function copyImageLikeBrowser(imageUrl) {
-        const pngBlob = await eh_fetchPngBlobFromUrl(imageUrl);
-        await eh_copyBlobToClipboard(pngBlob, { allowDownload: false }); // 第2步会给这个函数加参数
+        const blob = await eh_fetchBlobFromUrl(imageUrl);
+        const isGif = /\.gif($|\?)/i.test(imageUrl) || (blob && blob.type === 'image/gif');
+        await eh_copyBlobToClipboard(blob, { allowDownload: isGif });
     }
 
     /* === EH 工具函数 END === */
@@ -1211,8 +1287,7 @@
                     </div>
                 </div>
                 <div class="text-editor-actions">
-                    <button class="editor-btn primary" id="generate-btn">${lang.textEditor.generate}</button>
-                    <button class="editor-btn" id="download-btn" disabled>${lang.textEditor.download}</button>
+                    <button class="editor-btn primary" id="download-btn" disabled>${lang.textEditor.download}</button>
                     <button class="editor-btn" id="close-editor-btn">${lang.textEditor.close}</button>
                 </div>
             `;
@@ -1352,6 +1427,11 @@
                 canvas.style.cursor = 'grab';
             });
 
+            canvas.addEventListener('dragstart', (e) => {
+                // 禁用从预览canvas导出PNG，避免误把GIF变成静态第一帧
+                e.preventDefault();
+            });
+
             canvas.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
                 canvas.toBlob(async (blob) => {
@@ -1463,11 +1543,10 @@
             const fontFamilySelect = document.getElementById('font-family-select');
             const textColorPicker = document.getElementById('text-color-picker');
             const textPositionSelect = document.getElementById('text-position-select');
-            const generateBtn = document.getElementById('generate-btn');
             const downloadBtn = document.getElementById('download-btn');
 
+            // ★ 关键：输入时联动预览 & 控件变动时重绘
             if (textInput) textInput.addEventListener('input', this.redrawText.bind(this));
-
             if (fontSizeSlider) {
                 fontSizeSlider.addEventListener('input', (e) => {
                     const fontSizeValue = document.getElementById('font-size-value');
@@ -1475,60 +1554,40 @@
                     this.redrawText();
                 });
             }
-
             if (fontFamilySelect) fontFamilySelect.addEventListener('change', this.redrawText.bind(this));
             if (textColorPicker) textColorPicker.addEventListener('change', this.redrawText.bind(this));
             if (textPositionSelect) textPositionSelect.addEventListener('change', this.redrawText.bind(this));
 
-            if (generateBtn) {
-                generateBtn.addEventListener('click', async () => {
+            // 下载键：点击时生成并下载（GIF 保持多帧）
+            if (downloadBtn) {
+                downloadBtn.addEventListener('click', async () => {
                     this.redrawText();
                     const text = document.getElementById('text-input')?.value || '';
                     if (!text) { showMessage('请输入文字'); return; }
 
-                    const fontSize = document.getElementById('font-size-slider')?.value || 36;
+                    const fontSize = parseInt(document.getElementById('font-size-slider')?.value || 36, 10);
                     const fontFamily = document.getElementById('font-family-select')?.value || 'Arial, sans-serif';
                     const textColor = document.getElementById('text-color-picker')?.value || '#ffffff';
                     const position = document.getElementById('text-position-select')?.value || 'bottom';
 
-                    showMessage('生成中，请稍候…');
                     try {
                         const blob = await addTextToImageOrGifAndExport(currentEditingImage, text, {
-                            fontSize: parseInt(fontSize, 10),
-                            fontFamily,
-                            color: textColor,
-                            position
+                            fontSize, fontFamily, color: textColor, position
                         });
 
-                        this.lastGeneratedBlob = blob;
-
-                        const downloadBtnElm = document.getElementById('download-btn');
-                        if (downloadBtnElm) {
-                            downloadBtnElm.disabled = false;
-                            downloadBtnElm.onclick = () => {
-                                const url = URL.createObjectURL(blob);
-                                const a = document.createElement('a');
-                                a.href = url;
-                                a.download = 'emoji-text-' + Date.now() + (blob.type.includes('gif') ? '.gif' : '.png');
-                                document.body.appendChild(a);
-                                a.click();
-                                a.remove();
-                                setTimeout(() => URL.revokeObjectURL(url), 3000);
-                            };
-                        }
-
-                        await eh_copyBlobToClipboard(blob);
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'emoji-text-' + Date.now() + (blob.type.includes('gif') ? '.gif' : '.png');
+                        document.body.appendChild(a); a.click(); a.remove();
+                        setTimeout(() => URL.revokeObjectURL(url), 3000);
                         showMessage(t().messages.imageGenerated);
-                        Logger.info('UI', '图片生成完成（blob）', { size: blob.size, type: blob.type });
                     } catch (err) {
                         Logger.error('UI', '生成失败', err);
                         showMessage(t().messages.imageError);
                     }
                 });
             }
-
-
-            if (downloadBtn) downloadBtn.addEventListener('click', this.downloadImage.bind(this));
 
             Logger.debug('UI', '编辑器事件绑定完成');
         },
@@ -1578,7 +1637,7 @@
 
     // 🔍 网络GIF搜索 API
     const GifSearchAPI = {
-        async searchGifs(query, limit = 12) {
+        async searchGifs(query, limit = 12, timeoutMs = 3000) {
             const searchEngine = Config.get('searchEngine');
             const cacheKey = `${searchEngine}-${query}`;
 
@@ -1588,40 +1647,31 @@
             }
 
             try {
-                Logger.info('SEARCH', '开始搜索GIF', { query, engine: searchEngine, limit });
-                const results = await this.callAPI(query, limit);
-
+                Logger.info('SEARCH', '开始搜索GIF', { query, engine: searchEngine, limit, timeoutMs });
+                const results = await this.callAPI(query, limit, timeoutMs);
                 CacheManager.set(cacheKey, results, 'search');
-
-                Logger.info('SEARCH', '搜索成功', {
-                    query,
-                    engine: searchEngine,
-                    resultCount: results.length
-                });
+                Logger.info('SEARCH', '搜索成功', { query, engine: searchEngine, resultCount: results.length });
                 return results;
             } catch (error) {
                 Logger.error('SEARCH', '搜索失败', { query, engine: searchEngine, error });
                 return [];
             }
         },
-
-        async callAPI(query, limit) {
+        async callAPI(query, limit, timeoutMs = 3000) {
             const searchEngine = Config.get('searchEngine');
 
             return new Promise((resolve, reject) => {
                 const apiUrl = this.getApiUrl(searchEngine, query, limit);
-                Logger.debug('SEARCH', '调用API', { url: apiUrl });
+                Logger.debug('SEARCH', '调用API', { url: apiUrl, timeoutMs });
 
-                const timeout = setTimeout(() => {
-                    reject(new Error('API请求超时'));
-                }, 20000);
+                const kill = setTimeout(() => reject(new Error('API请求超时')), timeoutMs);
 
                 GM_xmlhttpRequest({
                     method: 'GET',
                     url: apiUrl,
-                    timeout: 20000,
+                    timeout: timeoutMs,
                     onload: (response) => {
-                        clearTimeout(timeout);
+                        clearTimeout(kill);
                         try {
                             Logger.debug('SEARCH', 'API响应状态', response.status);
                             const data = JSON.parse(response.responseText);
@@ -1634,12 +1684,12 @@
                         }
                     },
                     onerror: (error) => {
-                        clearTimeout(timeout);
+                        clearTimeout(kill);
                         Logger.error('SEARCH', 'API请求失败', error);
                         reject(error);
                     },
                     ontimeout: () => {
-                        clearTimeout(timeout);
+                        clearTimeout(kill);
                         Logger.error('SEARCH', 'API请求超时');
                         reject(new Error('请求超时'));
                     }
@@ -2580,8 +2630,8 @@
         // 应用保存的位置
         updatePanelPosition();
 
-        // 默认显示表情符号
-        showCategory('smileys');
+        // 默认显示“我的GIF”
+        showCategory('custom');
 
         // 聚焦搜索框
         const searchInput = emojiPanel.querySelector('.emoji-helper-search-input');
@@ -2627,8 +2677,8 @@
                 </div>
             </div>
             <div class="emoji-helper-tabs">
-                <button class="emoji-helper-tab active" data-category="smileys">${lang.categories.smileys}</button>
-                <button class="emoji-helper-tab" data-category="custom">${lang.categories.custom}</button>
+                <button class="emoji-helper-tab active" data-category="custom">${lang.categories.custom}</button>
+                <button class="emoji-helper-tab" data-category="smileys">${lang.categories.smileys}</button>
                 <button class="emoji-helper-tab" data-category="webGif">${lang.categories.webGif}</button>
             </div>
             <div class="emoji-helper-content">
@@ -2675,7 +2725,7 @@
                 if (searchInput.value.trim()) {
                     performSearch();
                 }
-            }, 500));
+            }, 800));
         }
 
         if (searchBtn) {
@@ -2695,7 +2745,6 @@
         Logger.debug('UI', '表情面板事件绑定完成');
     }
 
-    // 🔍 执行搜索
     async function performSearch() {
         const searchInput = emojiPanel?.querySelector('.emoji-helper-search-input');
         if (!searchInput) return;
@@ -2706,40 +2755,48 @@
             return;
         }
 
+        const reqId = ++searchRequestId; // 本次搜索的 ID
         if (isSearching) {
-            Logger.debug('SEARCH', '搜索进行中，跳过');
-            return;
+            Logger.debug('SEARCH', '搜索进行中，仍然记录最新reqId以丢弃旧结果');
         }
 
-        Logger.info('SEARCH', '开始搜索', query);
+        Logger.info('SEARCH', '开始搜索', { query, reqId });
         setSearching(true);
 
         try {
-            // 搜索表情符号
+            // 1) 本地结果：先立即渲染，保证UI不卡
             const emojiResults = searchEmojis(query);
-
-            // 搜索自定义GIF
             const customResults = searchCustomGifs(query);
-
-            // 搜索网络GIF
-            const webResults = await GifSearchAPI.searchGifs(query, 12);
-
-            const allResults = [
-                ...emojiResults.map(emoji => ({ type: 'emoji', data: emoji })),
-                ...customResults.map(gif => ({ type: 'gif', data: gif })),
-                ...webResults.map(gif => ({ type: 'webGif', data: gif }))
+            const localResults = [
+                ...emojiResults.map(e => ({ type: 'emoji', data: e })),
+                ...customResults.map(g => ({ type: 'gif', data: g })),
             ];
+            requestAnimationFrame(() => displaySearchResults(localResults, query));
 
-            displaySearchResults(allResults, query);
+            // 2) 第三方：最多等3秒；失败/超时就放弃
+            const webPromise = GifSearchAPI.searchGifs(query, 12, 3000)
+            .catch(err => { Logger.warn('SEARCH', '第三方失败', err); return []; });
+            const webResults = await eh_withTimeout(webPromise, 3000);
 
-            Logger.info('SEARCH', '搜索完成', {
-                query,
-                emoji: emojiResults.length,
-                custom: customResults.length,
-                web: webResults.length,
-                total: allResults.length
-            });
+            // 3) 过期保护
+            if (reqId !== searchRequestId) {
+                Logger.warn('SEARCH', '丢弃过期搜索结果', { query, reqId, latest: searchRequestId });
+                return;
+            }
 
+            // 4) 成功在3s内返回才合并
+            if (webResults !== '__EH_TIMEOUT__' && Array.isArray(webResults)) {
+                const merged = [
+                    ...localResults,
+                    ...webResults.map(g => ({ type: 'webGif', data: g })),
+                ];
+                displaySearchResults(merged, query);
+                Logger.info('SEARCH', '搜索完成(含第三方)', {
+                    query, emoji: emojiResults.length, custom: customResults.length, web: webResults.length, total: merged.length
+                });
+            } else {
+                Logger.warn('SEARCH', '第三方搜索超时(3s)，仅显示本地结果');
+            }
         } catch (error) {
             Logger.error('SEARCH', '搜索失败', { query, error });
             showMessage(t().messages.apiError, 'error');
@@ -3086,16 +3143,28 @@
         }
     }
 
-    // 插入 GIF / 图片：复制文件而不是链接
-    // 点击后像“复制图像”一样把位图放进剪贴板
+    // 插入 GIF / 图片：在 linux.do 直接插入 Markdown 链接；其他站点保持原逻辑
     async function insertGif(gif) {
+        const isDiscourse = location.hostname.endsWith('linux.do');
+        const textArea = document.querySelector('.d-editor-input');
+
+        if (isDiscourse && textArea) {
+            // 参照“人家的机制”，插入 Markdown（避免 blob:）
+            const alt = (gif.alt || gif.title || 'gif').replace(/\|/g, ' ');
+            const md = `![${alt}|2048x2048,10%](${gif.url})`;
+            insertToActiveElement(md);
+            if (Config.get('autoInsert')) hideEmojiPanel();
+            return;
+        }
+
+        // 非 linux.do：沿用原“复制到剪贴板”的逻辑
         Logger.info('EVENT', '复制图像到剪贴板', { url: gif.url });
         try {
-            await copyImageLikeBrowser(gif.url);  // 第1步新增的函数
-            showMessage(t().messages.copied);     // “已复制到剪贴板”
+            await copyImageLikeBrowser(gif.url);
+            showMessage(t().messages.copied);
         } catch (err) {
             Logger.warn('EVENT', '复制图像失败，回退为插入链接', err);
-            insertToActiveElement(gif.url);       // 实在不行再退回链接
+            insertToActiveElement(gif.url);
         }
         if (Config.get('autoInsert')) hideEmojiPanel();
     }
@@ -3520,6 +3589,6 @@
         version: '1.1.0'
     };
 
-    Logger.info('INIT', '表情符号助手 Pro v1.1.0 加载完成 🎉');
+    Logger.info('INIT', '表情符号助手 Pro v1.2.0 加载完成 🎉');
 
 })();
